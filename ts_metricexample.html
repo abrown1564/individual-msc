@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TruthSpace Article Analysis</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+  <style>
+    .logo-font { font-family: 'Orbitron', sans-serif; letter-spacing: 0.05em; }
+    .genz-mode .genz-hidden { display: block; }
+    .genz-mode .default-shown { display: none; }
+    .genz-hidden { display: none; }
+    .metric-label { font-weight: 600; color: #93c5fd; }
+    .toggle-section { cursor: pointer; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-blue-900 to-black text-white min-h-screen p-6">
+  <!-- Gen Z toggle -->
+  <div class="absolute top-6 right-6">
+    <button onclick="toggleGenZ()" id="toggleBtn"
+            class="bg-pink-600 hover:bg-pink-500 text-sm text-white px-4 py-2 rounded-full shadow-lg">
+      Switch to Gen Z Mode
+    </button>
+  </div>
+
+  <!-- Header -->
+  <header class="text-center mb-12">
+    <h1 class="text-4xl sm:text-5xl font-bold text-blue-400 logo-font tracking-wider">TruthSpace</h1>
+    <h2 class="mt-4 text-xl sm:text-2xl text-gray-300 default-shown">Article Intelligence Snapshot</h2>
+    <h2 class="mt-4 text-xl sm:text-2xl text-pink-300 font-bold genz-hidden">🧠 Truth Drop</h2>
+    <p id="articleIdLine" class="mt-2 text-gray-400">Loading article ID...</p>
+  </header>
+
+  <!-- Content -->
+  <main class="w-full px-4 sm:px-8 lg:px-16 space-y-12" id="analysisContent">
+    <p class="text-gray-300">Loading article data...</p>
+  </main>
+
+  <footer class="text-center mt-20 text-sm text-gray-500">
+    <p>TruthSpace Prototype — Mapping influence with clarity</p>
+  </footer>
+
+  <script>
+    let genz = false;
+    const fmt = (x) => (x == null ? "N/A" : Number(x).toFixed(3));
+
+    function toggleGenZ() {
+      document.body.classList.toggle('genz-mode');
+      genz = !genz;
+      document.getElementById("toggleBtn").textContent =
+        genz ? "Switch to Classic Mode" : "Switch to Gen Z Mode";
+    }
+
+    function renderMetricBlock(title, items) {
+      return `
+        <div class="bg-gray-800 p-4 rounded-lg shadow-md">
+          <div class="flex justify-between items-center border-b border-blue-700 pb-1 mb-2">
+            <h4 class="text-lg font-semibold text-blue-200">${title}</h4>
+            <a href="ts_investigate_funding.html" class="text-sm text-blue-400 hover:underline">How can I help?</a>
+          </div>
+          <ul class="text-gray-300 list-disc list-inside space-y-2">
+            ${items.map(i => `<li>${i}</li>`).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
+    async function loadArticleData() {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("id");
+      document.getElementById("articleIdLine").textContent = `Analysis of article ID #${id}`;
+
+      const res = await fetch("articles_uk_us.json");
+      const data = await res.json();
+      // robust lookup (supports article_id or id)
+      const article = data.find(a => String(a.article_id ?? a.id) === String(id));
+
+      const container = document.getElementById("analysisContent");
+      if (!article) {
+        container.innerHTML = `<p class='text-red-400'>Article not found.</p>`;
+        return;
+      }
+
+      // bias fields – support both old (bias_*) and new (provider_*_label) names
+      const biasAdfontes = article.adfontes_bias_label ?? article.bias_adfontes ?? "Unknown";
+      const biasMbfc     = article.mbfc_bias_rating     ?? article.bias_mbfc     ?? "Unknown";
+      const biasAllSides = article.allsides_bias_rating ?? article.bias_allsides  ?? "Unknown";
+
+      const sentimentHTML = `
+        <section class="space-y-4">
+          <h3 class="text-2xl font-semibold text-blue-300 default-shown">Sentiment Analysis</h3>
+          <h3 class="text-2xl font-semibold text-pink-300 font-bold genz-hidden">💬 Mood Meter</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 text-gray-300">
+            <div><span class="font-bold">Polarity:</span> ${fmt(article.textblob_polarity)}</div>
+            <div><span class="font-bold">Subjectivity:</span> ${fmt(article.textblob_subjectivity)}</div>
+            <div><span class="font-bold">VADER Compound:</span> ${fmt(article.vader_compound)}</div>
+            <div><span class="font-bold">VADER Breakdown:</span> ${
+              (article.vader_pos != null && article.vader_neu != null && article.vader_neg != null)
+                ? `Pos: ${fmt(article.vader_pos)}, Neu: ${fmt(article.vader_neu)}, Neg: ${fmt(article.vader_neg)}`
+                : "N/A"
+            }</div>
+          </div>
+        </section>
+      `;
+
+      const biasHTML = `
+        <section class="space-y-4">
+          <h3 class="text-2xl font-semibold text-blue-300 default-shown">Bias Ratings</h3>
+          <h3 class="text-2xl font-semibold text-pink-300 font-bold genz-hidden">🎭 Bias Vibes Check</h3>
+          <ul class="ml-4 list-disc text-gray-300 space-y-1">
+            <li><strong>Ad Fontes:</strong> ${biasAdfontes}</li>
+            <li><strong>MBFC:</strong> ${biasMbfc}</li>
+            <li><strong>AllSides:</strong> ${biasAllSides}</li>
+          </ul>
+        </section>
+      `;
+
+      const svoHTML = (article.svo_triples && article.svo_triples.length)
+        ? `
+          <section class="space-y-4">
+            <h3 class="text-2xl font-semibold text-blue-300 default-shown">SVO Triples</h3>
+            <h3 class="text-2xl font-semibold text-pink-300 font-bold genz-hidden">🕵️‍♀️ What’s the Agenda?</h3>
+            <p class="text-gray-400">Who did what to whom:</p>
+            <ul class="list-disc ml-4 text-gray-200 space-y-1">
+              ${article.svo_triples.map(t => `<li>${t}</li>`).join("")}
+            </ul>
+          </section>
+        ` : "";
+
+      const nerHTML = (article.named_entities && article.named_entities.length)
+        ? `
+          <section class="space-y-4">
+            <h3 class="text-2xl font-semibold text-blue-300 default-shown">Named Entities</h3>
+            <h3 class="text-2xl font-semibold text-pink-300 font-bold genz-hidden">💡 Who’s Involved?</h3>
+            <ul class="list-disc ml-4 text-gray-200 space-y-1">
+              ${article.named_entities.map(ent => `<li>${ent}</li>`).join("")}
+            </ul>
+          </section>
+        ` : "";
+
+      const ownershipHTML = `
+        <section class="space-y-4">
+          <h3 class="text-2xl font-semibold text-blue-300 default-shown">
+            Transparency & Ownership Metrics for <span class="text-blue-100">${article.source || "Unknown Source"}</span>
+          </h3>
+          <h3 class="text-2xl font-semibold text-pink-300 font-bold genz-hidden">🧩 Who’s Behind This?</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-8">
+            ${renderMetricBlock("Ownership & Corporate Structure", [
+              "Parent Company Research: [Blank]",
+              "Corporate Registries: [Pending]",
+              "Shell Companies: [No evidence]"
+            ])}
+            ${renderMetricBlock("Funding & Disclosure", [
+              "Official Disclosures: [Unknown]",
+              "Grant Databases: [Not yet searched]",
+              "Nonprofit Filings: [N/A]",
+              "Donor-Advised Funds: [Unknown]",
+              "Follow the Money: [Unknown]"
+            ])}
+            ${renderMetricBlock("Historical & Technical Signals", [
+              "WHOIS Lookup: [TBD]",
+              "Wayback Machine: [Snapshot Found - 2022]"
+            ])}
+            ${renderMetricBlock("Influence & Coordination", [
+              "Astroturfing Indicators: [To review]",
+              "Cross-Platform Coordination: [Possible — check content similarity with other ID #s]",
+              "Leaks/Documents: [None found]",
+              "Media Coverage: [One Guardian article 2024]",
+              "Reverse Image/Name: [Incomplete]"
+            ])}
+          </div>
+        </section>
+      `;
+
+      container.innerHTML = biasHTML + sentimentHTML + svoHTML + nerHTML + ownershipHTML;
+    }
+
+    loadArticleData();
+  </script>
+</body>
+</html>

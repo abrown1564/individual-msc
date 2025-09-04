@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TruthSpace – Article Explorer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
+  <style>
+    .logo-font { font-family: 'Orbitron', sans-serif; letter-spacing: 0.05em; }
+    .chip { display:inline-block; padding:0.125rem 0.5rem; border-radius:9999px; font-size:0.75rem; line-height:1rem; }
+    .chip-blue { background:#1e3a8a; color:#bfdbfe; }
+    .chip-green{ background:#065f46; color:#a7f3d0; }
+    .chip-amber{ background:#78350f; color:#fde68a; }
+    .chip-gray { background:#374151; color:#e5e7eb; }
+    .btn { padding:.25rem .5rem; border-radius:.375rem; font-size:.75rem; }
+    .control-label { display:block; margin-bottom:.5rem; color:#93c5fd; font-weight:600; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 via-blue-900 to-black text-white min-h-screen p-6">
+  <header class="text-center mb-10">
+    <h1 class="text-4xl sm:text-5xl font-bold text-blue-400 logo-font tracking-wider">TruthSpace</h1>
+    <p class="mt-2 text-lg text-gray-300">Choose a topic or paste a URL to analyse narratives</p>
+  </header>
+
+  <main class="max-w-5xl mx-auto">
+    <!-- Controls -->
+    <section class="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <label class="control-label">Filter by Source / Title</label>
+        <input id="searchBox" type="text" placeholder="Type to filter…"
+               class="w-full p-2 rounded-md bg-gray-800 text-white outline-none ring-1 ring-gray-700 focus:ring-blue-500"/>
+      </div>
+
+      <div>
+        <label for="topicSelect" class="control-label">Select Topic</label>
+        <select id="topicSelect" class="w-full p-2 rounded-md bg-gray-800 text-white">
+          <option value="all" selected>All (show everything)</option>
+          <option value="immigration">Immigration (demo)</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="sortSelect" class="control-label">Sort By Date</label>
+        <select id="sortSelect" class="w-full p-2 rounded-md bg-gray-800 text-white">
+          <option value="newest" selected>Newest first</option>
+          <option value="oldest">Oldest first</option>
+        </select>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label for="fromDate" class="control-label">From</label>
+          <input id="fromDate" type="date" class="w-full p-2 rounded-md bg-gray-800 text-white ring-1 ring-gray-700 focus:ring-blue-500">
+        </div>
+        <div>
+          <label for="toDate" class="control-label">To</label>
+          <input id="toDate" type="date" class="w-full p-2 rounded-md bg-gray-800 text-white ring-1 ring-gray-700 focus:ring-blue-500">
+        </div>
+      </div>
+    </section>
+
+    <!-- Bias Filter -->
+    <section class="mb-8">
+      <label class="control-label">Filter by Bias (bias_canonical)</label>
+      <div class="inline-flex gap-2">
+        <button id="biasBtn_left"   class="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white text-sm" aria-pressed="false">Left</button>
+        <button id="biasBtn_center" class="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white text-sm" aria-pressed="false">Center</button>
+        <button id="biasBtn_right"  class="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-white text-sm" aria-pressed="false">Right</button>
+      </div>
+      <p class="text-xs text-gray-400 mt-2">Left = Left/Lean Left · Center = Center · Right = Right/Lean Right. Click again to clear.</p>
+    </section>
+
+    <!-- Articles by Source -->
+    <section class="mb-10">
+      <h2 class="text-xl font-semibold text-blue-300 mb-2">Articles by Source</h2>
+      <div id="articlesBySource" class="space-y-4"></div>
+    </section>
+
+    <!-- Manual URL Input (stub) -->
+    <section class="mb-10">
+      <label for="urlInput" class="block text-lg font-semibold text-blue-300 mb-2">Analyse New Article (Paste URL):</label>
+      <div class="flex gap-2">
+        <input id="urlInput" type="text" class="flex-grow p-2 rounded-md bg-gray-800 text-white" placeholder="https://..." />
+        <button id="urlSubmit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white">Go</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const byId = (id)=>document.getElementById(id);
+
+    const fmtDate = (d)=> {
+      const t = Date.parse(d);
+      return isNaN(t) ? (d || "") : new Date(t).toLocaleDateString();
+    };
+
+    const getTime = (d)=> {
+      const t = Date.parse(d);
+      return isNaN(t) ? null : t;
+    };
+
+    // Bias + factuality chips (unchanged)
+    // Canonical-only bias chip (with provider tooltip)
+    function biasChip(a) {
+      const canon = (a.bias_canonical || "").trim();
+      const label = canon || "Unknown";
+      const low = label.toLowerCase();
+
+      const cls =
+        /left/.test(low) ? "chip-blue" :
+        /(center|centre|neutral)/.test(low) ? "chip-green" :
+        /right/.test(low) ? "chip-amber" :
+        "chip-gray";
+
+      const gn = a.ground_news_bias_label || "–";
+      const as = a.allsides_bias_rating || "–";
+      const mb = a.mbfc_bias_rating || "–";
+      const disagree = canon && [gn, as, mb].some(v => v && v !== canon);
+
+
+      return `<span class="chip ${cls}" title="Canonical: ${label} • GN:${gn} • AS:${as} • MBFC:${mb}${disagree ? ' • ⚑ disagreement' : ''}">${label}</span>`;
+    }
+
+
+    function factChip(a) {
+      const f = a.ground_news_factuality || a.adfontes_reliability_label || a.mbfc_factual_reporting;
+      const cls = f ? ( /very high|high/i.test(f) ? "chip-green"
+                   : /medium|mixed/i.test(f) ? "chip-amber" : "chip-gray") : "chip-gray";
+      return `<span class="chip ${cls}" title="Factuality">${f || "Unknown"}</span>`;
+    }
+
+    function analyseHref(a){
+      const id = a.article_id ?? a.id;
+      return `ts_metricexample.html?id=${encodeURIComponent(id)}`;
+    }
+
+    function renderList(grouped, sortDir){
+      const container = byId("articlesBySource");
+      container.innerHTML = "";
+
+      // Sort sources by number of articles (desc), tie-break A→Z
+      const entries = Object.entries(grouped).sort((a, b) => {
+        const diff = b[1].length - a[1].length;
+        return diff !== 0 ? diff : a[0].localeCompare(b[0]);
+      });
+
+      entries.forEach(([src, items]) => {
+        // sort items within each source by publishedAt
+        items = items.slice().sort((a,b)=>{
+          const ta = getTime(a.publishedAt);
+          const tb = getTime(b.publishedAt);
+          if (ta == null && tb == null) return 0;
+          if (ta == null) return 1;
+          if (tb == null) return -1;
+          return sortDir === "oldest" ? (ta - tb) : (tb - ta);
+        });
+
+        const sec = document.createElement("div");
+        sec.className = "bg-gray-800 rounded-lg overflow-hidden";
+
+        const header = document.createElement("button");
+        header.className = "w-full text-left px-4 py-3 bg-gray-800 hover:bg-gray-700 flex justify-between items-center";
+        header.innerHTML =
+          `<span class="font-semibold text-blue-200">${src || "Unknown"}</span>
+          <span class="text-sm text-gray-300">${items.length} article(s)</span>`;
+        sec.appendChild(header);
+
+        const body = document.createElement("div");
+        body.className = "p-4 border-t border-gray-700 hidden";
+
+        const ul = document.createElement("ul");
+        ul.className = "space-y-3";
+
+        items.forEach(a => {
+          const li = document.createElement("li");
+          li.className = "bg-gray-900/60 p-3 rounded-md";
+          const chips = biasChip(a) + " " + factChip(a);
+          li.innerHTML =
+            `<div class="flex flex-col gap-1">
+              <div class="flex items-center flex-wrap gap-2">
+                <a href="${a.url}" target="_blank" class="text-blue-400 hover:underline">${a.title || "(untitled)"}</a>
+                <span class="text-gray-400 text-xs">• ${fmtDate(a.publishedAt)}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                ${chips}
+                <a class="btn bg-purple-700 hover:bg-purple-800 text-white" target="_blank" href="${analyseHref(a)}">Analyse</a>
+              </div>
+              ${a.query ? `<div class="text-gray-400 text-xs">Query: ${a.query}</div>` : ""}
+            </div>`;
+          ul.appendChild(li);
+        });
+
+        body.appendChild(ul);
+        sec.appendChild(body);
+        header.addEventListener("click", ()=> body.classList.toggle("hidden"));
+        container.appendChild(sec);
+      });
+    }
+
+
+    function groupArticles(list, filterText){
+      const q = (filterText || "").trim().toLowerCase();
+      const out = {};
+      list.forEach(a => {
+        const src = (a.source || "Unknown").trim();
+        const hay = `${src} ${a.title || ""}`.toLowerCase();
+        if (!q || hay.includes(q)) {
+          (out[src] ||= []).push(a);
+        }
+      });
+      return out;
+    }
+
+    // ---------- NEW: bias filter state & helpers ----------
+    let BIAS_FILTER = null; // 'left' | 'center' | 'right' | null
+
+    function setBiasFilter(val){
+      BIAS_FILTER = (BIAS_FILTER === val) ? null : val; // toggle off if clicking again
+      // visual state
+      const map = { left: 'biasBtn_left', center: 'biasBtn_center', right: 'biasBtn_right' };
+      ['left','center','right'].forEach(k=>{
+        const btn = byId(map[k]);
+        const active = (BIAS_FILTER === k);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.classList.toggle('bg-blue-600', active);
+        btn.classList.toggle('bg-gray-700', !active);
+      });
+      recompute();
+    }
+
+    function matchesBiasCanonical(a){
+      const v = (a.bias_canonical || "").trim().toLowerCase();
+      if (!BIAS_FILTER) return true;
+      if (BIAS_FILTER === 'center')    return v === 'center' || v === 'centre';
+      if (BIAS_FILTER === 'left')      return v === 'left' || v === 'lean left';
+      if (BIAS_FILTER === 'right')     return v === 'right' || v === 'lean right';
+      return true;
+    }
+
+    // Pipeline: topic filter -> date range filter -> bias filter -> text filter -> render (sorted)
+    let ALL = [];
+
+    function recompute(){
+      const topic = byId("topicSelect").value;
+      const qtext = byId("searchBox").value;
+      const sortDir = byId("sortSelect").value;
+      const fromV = byId("fromDate").value;
+      const toV   = byId("toDate").value;
+
+      const fromT = fromV ? Date.parse(fromV + "T00:00:00Z") : null;
+      const toT   = toV   ? Date.parse(toV   + "T23:59:59Z") : null;
+
+      // 1) topic
+      let list = (topic === "immigration")
+        ? ALL.filter(a => (a.query || "").toLowerCase().includes("immigr"))
+        : ALL.slice();
+
+      // 2) date range
+      list = list.filter(a => {
+        const t = getTime(a.publishedAt);
+        if (t == null) return true;
+        if (fromT != null && t < fromT) return false;
+        if (toT   != null && t > toT)   return false;
+        return true;
+      });
+
+      // 3) bias filter (bias_canonical)
+      list = list.filter(matchesBiasCanonical);
+
+      // 4) text filter + group
+      const grouped = groupArticles(list, qtext);
+
+      // 5) render with sort
+      renderList(grouped, sortDir);
+    }
+
+    async function loadArticles(){
+      try{
+        const res = await fetch("articles_uk_us.json");
+        ALL = await res.json();
+
+        // wire controls
+        byId("topicSelect").addEventListener("change", recompute);
+        byId("searchBox").addEventListener("input", recompute);
+        byId("sortSelect").addEventListener("change", recompute);
+        byId("fromDate").addEventListener("change", recompute);
+        byId("toDate").addEventListener("change", recompute);
+
+        // new bias buttons
+        byId("biasBtn_left").addEventListener("click", ()=> setBiasFilter('left'));
+        byId("biasBtn_center").addEventListener("click", ()=> setBiasFilter('center'));
+        byId("biasBtn_right").addEventListener("click", ()=> setBiasFilter('right'));
+
+        recompute();
+      }catch(err){
+        console.error(err);
+        byId("articlesBySource").innerHTML = `<p class="text-red-400">Failed to load articles_uk_us.json</p>`;
+      }
+    }
+
+    // stub for manual URL
+    byId("urlSubmit").addEventListener("click", ()=>{
+      const url = byId("urlInput").value.trim();
+      if(!url) return;
+      alert("(demo) Would send URL for analysis:\n" + url);
+    });
+
+    // boot
+    loadArticles();
+  </script>
+</body>
+</html>
